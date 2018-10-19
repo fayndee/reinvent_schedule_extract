@@ -19,6 +19,8 @@ import requests
 from time import sleep
 from bs4 import BeautifulSoup
 import re
+from datetime import datetime
+from datetime import time
 
 # Search parameters
 VENUE_CODES = {
@@ -58,7 +60,7 @@ PASSWORD = 'PASSWORD'
 CHROME_DRIVER = './chromedriver'
 
 # Set to False to ignore SSL certificate validation in Requests package
-REQ_VERIFY = True
+REQ_VERIFY = False
 
 # Initialize headless chrome
 chrome_options = Options()
@@ -104,7 +106,7 @@ def get_session_time(session_id):
     }
     headers = {'Content-Type': 'text/plain'}
     r = requests.post(url, headers=headers, data=data, verify=REQ_VERIFY)
-    returned = r.content
+    returned = r.content.decode('unicode-escape')
     returned = returned.replace("\\", '')
 
     # Returns in XHR format. Strip out the relevant information.
@@ -113,8 +115,11 @@ def get_session_time(session_id):
     room = search(r"room\":(\".*?\")", returned)
 
     time_information = {
-        "start_time": start_time.replace('"', ''),
-        "end_time": end_time.replace('"', ''),
+        # start_time & end_time transformation to ease Excel formatting
+        # Wednesday, Nov 28, 5:30 PM -> 28/11/2018 17:30:00
+        # 5:30 PM -> 17:00:00
+        "start_time": datetime.strptime(start_time.replace('"', ''), "%A, %b %d, %I:%M %p").strftime("%d/%m/%Y %H:%M:%S"),
+        "end_time": datetime.strptime(end_time.replace('"', ''), "%I:%M %p").strftime("%H:%M:%S"),
         "room": room.replace('"', ''),
         "day": start_time.replace('"', '')[:start_time.replace('"', '').find(',')]
     }
@@ -154,7 +159,7 @@ for day, day_id in DAY_CODES.items():
         print ("Getting content at {0} on {1}...".format(venue, day))
         driver.get("http://google.com")
         driver.get(url)
-        sleep(3)
+        sleep(2)
         more_results = True
         # Click through all of the session results pages for a specific day.
         # The goal is to get the full list for a day loaded.
@@ -165,7 +170,7 @@ for day, day_id in DAY_CODES.items():
                 get_results_btn = driver.find_element_by_link_text("Get More Results")
                 print ("Getting more results...")
                 get_results_btn.click()
-                sleep(3)
+                sleep(2)
             except NoSuchElementException as e:
                 more_results = False
 
@@ -192,39 +197,38 @@ driver.close()
 # sessions = soup.find_all("div", class_="sessionRow")
 
 # Open a blank text file to write sessions to
-file = open("sessions.txt","w")
+with open("sessions.txt","w") as file:
 # Create a header row for the file. Note the PIPE (|) DELIMITER.
-file.write("Session Number|Session Type|Session Title|Session Interest|Start Time|End Time|Room and Building|Day of Week\n")
+    file.write("Session Number|Session Type|Session Title|Session Interest|Start Time|End Time|Room and Building|Day of Week\n")
 
-# For each session, pull out the relevant fields and write them to the sessions.txt file.
-for session in sessions:
-    session_soup = BeautifulSoup(str(session), "html.parser")
-    session_id = session_soup.find("div", class_="sessionRow")
-    session_id = session_id['id']
-    session_id = session_id[session_id.find("_")+1:]
-    session_timing = get_session_time(session_id)
-    session_number = session_soup.find("span", class_="abbreviation")
-    session_number = session_number.string.replace(" - ", "")
 
-    session_title = session_soup.find("span", class_="title")
-    session_title = session_title.string.encode('utf-8').rstrip()
-    session_title = session_title.decode('utf-8')
+    # For each session, pull out the relevant fields and write them to the sessions.txt file.
+    for session in sessions:
+        session_soup = BeautifulSoup(str(session), "html.parser")
+        session_id = session_soup.find("div", class_="sessionRow")
+        session_id = session_id['id']
+        session_id = session_id[session_id.find("_")+1:]
+        session_timing = get_session_time(session_id)
+        session_number = session_soup.find("span", class_="abbreviation")
+        session_number = session_number.string.replace(" - ", "")
 
-    session_type = session_soup.find("small", class_="type")
-    session_type = session_type.string
+        session_title = session_soup.find("span", class_="title")
+        session_title = session_title.string.encode('utf-8').rstrip()
+        session_title = session_title.decode('utf-8')
 
-    session_abstract = session_soup.find("span", class_="abstract")
+        session_type = session_soup.find("small", class_="type")
+        session_type = session_type.string
 
-    session_interest = session_soup.find("a", class_="interested")
+        session_abstract = session_soup.find("span", class_="abstract")
 
-    if (session_interest == None):
-        session_interest = False
-    else:
-        session_interest = True
+        session_interest = session_soup.find("a", class_="interested")
 
-    write_contents = str(session_number) + "|" + session_type + "|" + session_title + "|" + str(session_interest) + "|" + str(session_timing['start_time']) + "|" + str(session_timing['end_time']) + "|" + str(session_timing['room'] + "|" + str(session_timing['day']))
-    file.write(write_contents.encode('utf-8').strip() + "\n")
-    # Print the session title for each session written to the file
-    print (session_title.encode('utf-8').strip())
+        if (session_interest == None):
+            session_interest = False
+        else:
+            session_interest = True
 
-file.close()
+        write_contents = str(session_number) + "|" + session_type + "|" + session_title + "|" + str(session_interest) + "|" + str(session_timing['start_time']) + "|" + str(session_timing['end_time']) + "|" + str(session_timing['room'] + "|" + str(session_timing['day']))
+        file.write(write_contents.strip() + "\n")
+        # Print the session title for each session written to the file
+        print (session_title.encode('utf-8').strip())
