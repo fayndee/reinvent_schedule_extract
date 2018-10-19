@@ -118,7 +118,7 @@ def get_session_time(session_id):
         # start_time & end_time transformation to ease Excel formatting
         # Wednesday, Nov 28, 5:30 PM -> 28/11/2018 17:30:00
         # 5:30 PM -> 17:00:00
-        "start_time": datetime.strptime(start_time.replace('"', ''), "%A, %b %d, %I:%M %p").strftime("%d/%m/%Y %H:%M:%S"),
+        "start_time": datetime.strptime(start_time.replace('"', ''), "%A, %b %d, %I:%M %p").replace(year=2018).strftime("%d/%m/%Y %H:%M:%S"),
         "end_time": datetime.strptime(end_time.replace('"', ''), "%I:%M %p").strftime("%H:%M:%S"),
         "room": room.replace('"', ''),
         "day": start_time.replace('"', '')[:start_time.replace('"', '').find(',')]
